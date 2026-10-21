@@ -3,6 +3,9 @@ package com.rubendt.tvlauncher
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.accounts.AccountManager
+import android.content.ComponentName
+import android.media.MediaMetadata
+import android.media.session.MediaSessionManager
 import android.content.Context
 import android.content.Intent
 import androidx.tvprovider.media.tv.TvContractCompat
@@ -166,18 +169,70 @@ suspend fun loadFreshShows(perProvider: Int = 10): Map<String, List<Content>> =
         }.awaitAll().filter { it.second.isNotEmpty() }.toMap()
     }
 
+fun recordWatch(context: Context, c: Content) {
+    if (c.packageName == null || c.app != null) return
+    recordWatch(context, c.packageName, c.title, c.subtitle, c.imageUrl)
+}
+
+private fun recordWatch(context: Context, pkg: String, title: String, subtitle: String, imageUrl: String?) {
+    runCatching {
+        context.getSharedPreferences("watch_history", Context.MODE_PRIVATE).edit()
+            .putString(pkg, JSONObject()
+                .put("title", title).put("subtitle", subtitle).put("imageUrl", imageUrl)
+                .put("t", System.currentTimeMillis()).toString())
+            .apply()
+    }
+}
+
+suspend fun captureActiveMedia(context: Context) = withContext(Dispatchers.IO) {
+    runCatching {
+        val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        msm.getActiveSessions(ComponentName(context, MediaTracker::class.java))
+            .filter { it.packageName in ProviderCode }
+            .forEach { mc ->
+                val md = mc.metadata ?: return@forEach
+                val title = md.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+                    ?: md.getString(MediaMetadata.METADATA_KEY_TITLE) ?: return@forEach
+                val subtitle = md.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+                    ?: md.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
+                val art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                var imageUrl: String? = null
+                if (art != null) {
+                    val f = java.io.File(context.filesDir, "art_${mc.packageName}.png")
+                    java.io.FileOutputStream(f).use { art.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+                    imageUrl = f.absolutePath
+                }
+                recordWatch(context, mc.packageName, title, subtitle, imageUrl)
+            }
+    }
+}
+
+private fun recordedWatch(context: Context, pkg: String): Content? = runCatching {
+    val raw = context.getSharedPreferences("watch_history", Context.MODE_PRIVATE).getString(pkg, null) ?: return null
+    val j = JSONObject(raw)
+    Content(
+        id = "rec:$pkg", title = j.getString("title"), subtitle = j.optString("subtitle"),
+        description = "", imageUrl = j.optString("imageUrl").ifBlank { null },
+        packageName = pkg, progress = null, intent = null,
+    )
+}.getOrNull()
+
 suspend fun buildContinuing(context: Context, apps: List<TvApp>): List<Content> {
     val usage = loadRecentUsage(context)
     val byPkg = apps.associateBy { it.packageName }
     val continuing = loadWatchNext(context).toMutableList()
     continuing += usage.entries.sortedByDescending { it.value }.mapNotNull { (pkg, t) ->
-        byPkg[pkg]?.let { a ->
-            Content(
-                id = "app:$pkg", title = a.label, subtitle = lastSeenLabel(t),
-                description = "", imageUrl = null, packageName = pkg, progress = null,
-                intent = a.launchIntent, app = a,
-            )
-        }
+        val a = byPkg[pkg] ?: return@mapNotNull null
+        val rec = recordedWatch(context, pkg)
+        if (rec != null) rec.copy(
+            subtitle = listOf(rec.subtitle, lastSeenLabel(t)).filter { it.isNotBlank() }.joinToString("  \u2022  "),
+            intent = a.launchIntent,
+        ) else Content(
+            id = "app:$pkg", title = a.label, subtitle = lastSeenLabel(t),
+            description = "", imageUrl = null, packageName = pkg, progress = null,
+            intent = a.launchIntent, app = a,
+        )
     }
     return continuing.distinctBy { it.id }
 }

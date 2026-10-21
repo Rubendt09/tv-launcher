@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 
+val HiddenApps = setOf(
+    "com.android.tv.settings",
+    "me.efesser.flauncher",
+)
+
 data class TvApp(
     val packageName: String,
     val label: String,
@@ -18,6 +23,7 @@ fun loadApps(context: Context): List<TvApp> {
     return categories
         .flatMap { pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(it), 0) }
         .filter { it.activityInfo.packageName != context.packageName }
+        .filter { it.activityInfo.packageName !in HiddenApps }
         .distinctBy { it.activityInfo.packageName }
         .map {
             val info = it.activityInfo

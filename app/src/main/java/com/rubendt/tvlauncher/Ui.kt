@@ -41,6 +41,9 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,7 +65,15 @@ fun LauncherScreen() {
     var continuing by remember { mutableStateOf(emptyList<Content>()) }
     var recommended by remember { mutableStateOf(emptyList<Content>()) }
     var selected by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var resumeTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) resumeTick++ }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+    LaunchedEffect(resumeTick) {
+        captureActiveMedia(context)
         apps = loadApps(context)
         continuing = buildContinuing(context, apps)
         recommended = buildRecommended(context, apps)
@@ -212,6 +223,7 @@ fun Hero(app: TvApp?, content: Content?, context: Context) {
 }
 
 private fun launch(context: Context, content: Content?, app: TvApp?) {
+    content?.let { recordWatch(context, it) }
     val intent = content?.intent ?: app?.launchIntent ?: return
     runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         .onFailure { app?.let { context.startActivity(it.launchIntent) } }
@@ -227,7 +239,7 @@ fun ContentRow(title: String, items: List<Content>, context: Context) {
                     Column {
                         Box(Modifier.fillMaxWidth().height(124.dp).background(Brush.linearGradient(listOf(Color(0xFF243056), Color(0xFF3B1E4A))))) {
                             c.imageUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                                ?: c.app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(440, 248).asImageBitmap() }, null, Modifier.align(Alignment.Center).size(160.dp, 90.dp)) }
+                                ?: c.app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(440, 248).asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                             c.progress?.let {
                                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66FFFFFF)))
                                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(it).height(4.dp).background(Color(0xFFE53935)))
