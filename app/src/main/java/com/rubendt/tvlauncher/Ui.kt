@@ -201,18 +201,24 @@ fun AppList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
 @Composable
 fun Hero(app: TvApp?, content: Content?, context: Context) {
     Box(Modifier.fillMaxWidth().height(260.dp).background(Card)) {
+        var landscape by remember(content?.imageUrl) { mutableStateOf<Boolean?>(null) }
         when {
             content?.wideUrl != null -> AsyncImage(content.wideUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             content?.imageUrl != null -> AsyncImage(content.imageUrl, null,
-                Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(180.dp, 240.dp).clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop)
+                modifier = if (landscape == true) Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(320.dp, 180.dp).clip(RoundedCornerShape(12.dp))
+                    else Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(180.dp, 240.dp).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop,
+                onSuccess = { st ->
+                    val dim = st.painter.intrinsicSize
+                    if (dim.width > 0 && dim.height > 0) landscape = dim.width >= dim.height
+                })
             else -> app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(640, 360).asImageBitmap() }, null, Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(240.dp, 135.dp)) }
         }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent))))
         Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(380.dp)) {
-            Text(content?.title ?: app?.label.orEmpty(), fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
-            content?.subtitle?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, color = Muted, modifier = Modifier.padding(top = 8.dp)) }
-            content?.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)) }
+            Text(content?.title ?: app?.label.orEmpty(), fontSize = 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
+            content?.subtitle?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = Muted, modifier = Modifier.padding(top = 8.dp)) }
+            content?.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)) }
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FocusSurface(onClick = { launch(context, content, app) }, modifier = Modifier.height(40.dp), shape = RoundedCornerShape(20.dp), idle = Color.White, focusedColor = Color(0xFFE0E6FF)) {
                     Box(Modifier.padding(horizontal = 24.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
