@@ -34,6 +34,7 @@ data class Content(
     val progress: Float?,
     val intent: Intent?,
     val app: TvApp? = null,
+    val wideUrl: String? = null,
 )
 
 data class Weather(val temp: Int, val glyph: String, val city: String)
@@ -87,7 +88,7 @@ suspend fun loadWeather(): Weather? = withContext(Dispatchers.IO) {
 
 fun loadAccount(context: Context): Account {
     val email = runCatching { AccountManager.get(context).getAccountsByType("com.google").firstOrNull()?.name }.getOrNull()
-    val name = email?.substringBefore('@')?.replaceFirstChar { it.uppercase() } ?: "Invitado"
+    val name = email?.substringBefore('@')?.replaceFirstChar { it.uppercase() } ?: "Ruben"
     return Account(name, name.first().uppercase())
 }
 
@@ -252,18 +253,23 @@ suspend fun buildRecommended(context: Context, apps: List<TvApp>): List<Content>
     return recommended.distinctBy { it.title }
 }
 
-suspend fun loadBackdrop(title: String): String? = withContext(Dispatchers.IO) {
+suspend fun loadImages(title: String): Pair<String?, String?> = withContext(Dispatchers.IO) {
     runCatching {
         val q = URLEncoder.encode(title, "utf-8")
         val arr = JSONArray(URL("https://api.tvmaze.com/search/shows?q=$q").readText())
-        if (arr.length() == 0) return@runCatching null
+        if (arr.length() == 0) return@runCatching null to null
         val id = arr.getJSONObject(0).getJSONObject("show").getInt("id")
         val imgs = JSONArray(URL("https://api.tvmaze.com/shows/$id/images").readText())
+        var banner: String? = null
+        var background: String? = null
         for (i in 0 until imgs.length()) {
             val im = imgs.getJSONObject(i)
-            if (im.optString("type") == "background")
-                return@runCatching im.getJSONObject("resolutions").getJSONObject("original").getString("url")
+            val url = im.getJSONObject("resolutions").getJSONObject("original").optString("url")
+            when (im.optString("type")) {
+                "banner" -> if (banner == null) banner = url
+                "background" -> if (background == null) background = url
+            }
         }
-        null
-    }.getOrNull()
+        banner to background
+    }.getOrDefault(null to null)
 }

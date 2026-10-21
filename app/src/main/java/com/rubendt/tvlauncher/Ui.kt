@@ -78,7 +78,10 @@ fun LauncherScreen() {
         continuing = buildContinuing(context, apps)
         recommended = buildRecommended(context, apps)
         recommended = coroutineScope {
-            recommended.map { c -> async { c.copy(imageUrl = loadBackdrop(c.title) ?: c.imageUrl) } }.awaitAll()
+            recommended.map { c -> async {
+                val (banner, bg) = loadImages(c.title)
+                c.copy(imageUrl = bg ?: c.imageUrl, wideUrl = banner)
+            } }.awaitAll()
         }
     }
     val app = apps.getOrNull(selected)
@@ -151,11 +154,6 @@ fun Header() {
 fun Sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.background(SidebarBg).padding(horizontal = 16.dp, vertical = 20.dp)) {
         Text("Tu TV", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 16.dp))
-        FocusSurface(onClick = {}, modifier = Modifier.fillMaxWidth().height(44.dp), idle = Color(0xFF1A2132)) {
-            Row(Modifier.padding(horizontal = 16.dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Buscar", fontSize = 15.sp, color = Muted)
-            }
-        }
         AppList(apps, onSelected, Modifier.weight(1f).fillMaxWidth())
         Spacer(Modifier.height(8.dp))
     }
@@ -203,9 +201,13 @@ fun AppList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
 @Composable
 fun Hero(app: TvApp?, content: Content?, context: Context) {
     Box(Modifier.fillMaxWidth().height(260.dp).background(Card)) {
-        val image: Any? = content?.imageUrl
-        if (image != null) AsyncImage(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        else app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(640, 360).asImageBitmap() }, null, Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(240.dp, 135.dp)) }
+        when {
+            content?.wideUrl != null -> AsyncImage(content.wideUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            content?.imageUrl != null -> AsyncImage(content.imageUrl, null,
+                Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(180.dp, 240.dp).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop)
+            else -> app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(640, 360).asImageBitmap() }, null, Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(240.dp, 135.dp)) }
+        }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent))))
         Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(380.dp)) {
             Text(content?.title ?: app?.label.orEmpty(), fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
