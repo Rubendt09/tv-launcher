@@ -23,6 +23,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.Calendar
 import java.net.URL
+import kotlin.math.roundToLong
+import kotlin.time.Duration.Companion.milliseconds
 
 data class Content(
     val id: String,
@@ -82,7 +84,7 @@ suspend fun loadWeather(): Weather? = withContext(Dispatchers.IO) {
             in 71..77 -> "\u2744"
             else -> "\u26A1"
         }
-        Weather(Math.round(cur.getDouble("temperature_2m")).toInt(), glyph, CITY)
+        Weather(cur.getDouble("temperature_2m").roundToLong().toInt(), glyph, CITY)
     }.getOrNull()
 }
 
@@ -109,7 +111,7 @@ suspend fun loadRecentUsage(context: Context, days: Int = 14): Map<String, Long>
         val e = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(e)
-            if (e.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || e.eventType == 23) last.merge(e.packageName, e.timeStamp, ::maxOf)
+            if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED || e.eventType == 23) last.merge(e.packageName, e.timeStamp, ::maxOf)
         }
         last.filterKeys { it in ProviderCode }
     }.getOrDefault(emptyMap())
@@ -125,7 +127,7 @@ private fun lastSeenLabel(lastUsed: Long): String {
 }
 
 private const val JW_QUERY =
-    "query(\$c:Country!,\$f:Int!,\$p:[String!]){popularTitles(country:\$c,first:\$f,sortBy:POPULAR,filter:{packages:\$p,includeTitlesWithoutUrl:true}){edges{node{content(country:\$c,language:es){title posterUrl}}}}}"
+    $$"query($c:Country!,$f:Int!,$p:[String!]){popularTitles(country:$c,first:$f,sortBy:POPULAR,filter:{packages:$p,includeTitlesWithoutUrl:true}){edges{node{content(country:$c,language:es){title posterUrl}}}}}"
 
 private fun jwImage(template: String?): String? =
     template?.let { "https://images.justwatch.com" + it.replace("{profile}", "s592").replace("{format}", "webp") }
@@ -158,7 +160,7 @@ private suspend fun fetchProvider(pkg: String, code: String, perProvider: Int): 
             }
         }.onFailure { android.util.Log.w("TvLauncher", "justwatch $code attempt $attempt failed", it) }.getOrNull()
         if (!list.isNullOrEmpty()) return list.distinctBy { it.title }
-        kotlinx.coroutines.delay(2_000L * (attempt + 1))
+        kotlinx.coroutines.delay((2_000L * (attempt + 1)).milliseconds)
     }
     return emptyList()
 }
@@ -226,14 +228,15 @@ suspend fun buildContinuing(context: Context, apps: List<TvApp>): List<Content> 
     continuing += usage.entries.sortedByDescending { it.value }.mapNotNull { (pkg, t) ->
         val a = byPkg[pkg] ?: return@mapNotNull null
         val rec = recordedWatch(context, pkg)
-        if (rec != null) rec.copy(
+        rec?.copy(
             subtitle = listOf(rec.subtitle, lastSeenLabel(t)).filter { it.isNotBlank() }.joinToString("  \u2022  "),
             intent = a.launchIntent,
-        ) else Content(
-            id = "app:$pkg", title = a.label, subtitle = lastSeenLabel(t),
-            description = "", imageUrl = null, packageName = pkg, progress = null,
-            intent = a.launchIntent, app = a,
         )
+            ?: Content(
+                id = "app:$pkg", title = a.label, subtitle = lastSeenLabel(t),
+                description = "", imageUrl = null, packageName = pkg, progress = null,
+                intent = a.launchIntent, app = a,
+            )
     }
     return continuing.distinctBy { it.id }
 }

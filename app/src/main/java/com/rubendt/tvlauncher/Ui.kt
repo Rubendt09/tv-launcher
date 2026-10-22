@@ -28,26 +28,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 private val Bg = Color(0xFF0A0E17)
 private val SidebarBg = Color(0xFF0D121D)
@@ -56,9 +55,8 @@ private val Accent = Color(0xFF2A3A66)
 private val Muted = Color(0xFF9AA3B8)
 
 
-
 @Composable
-fun LauncherScreen() {
+fun launcherScreen() {
     BackHandler(true) {}
     val context = LocalContext.current
     var apps by remember { mutableStateOf(emptyList<TvApp>()) }
@@ -78,30 +76,36 @@ fun LauncherScreen() {
         continuing = buildContinuing(context, apps)
         recommended = buildRecommended(context, apps)
         recommended = coroutineScope {
-            recommended.map { c -> async {
-                val (banner, bg) = loadImages(c.title)
-                c.copy(imageUrl = bg ?: c.imageUrl, wideUrl = banner)
-            } }.awaitAll()
+            recommended.map { c ->
+                async {
+                    val (banner, bg) = loadImages(c.title)
+                    c.copy(imageUrl = bg ?: c.imageUrl, wideUrl = banner)
+                }
+            }.awaitAll()
         }
     }
     val app = apps.getOrNull(selected)
     val hero = (continuing + recommended).firstOrNull { it.app == null && it.packageName == app?.packageName }
 
     Row(Modifier.fillMaxSize().background(Bg)) {
-        Sidebar(apps, onSelected = { selected = it }, Modifier.width(280.dp).fillMaxHeight())
+        sidebar(apps, onSelected = { selected = it }, Modifier.width(280.dp).fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            Header()
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                item { Hero(app, hero, context) }
-                if (continuing.isNotEmpty()) item { ContentRow("Continuar viendo", continuing, context) }
-                if (recommended.isNotEmpty()) item { ContentRow("Recomendados para ti", recommended, context) }
+            header()
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                item { hero(app, hero, context) }
+                if (continuing.isNotEmpty()) item { contentRow("Continuar viendo", continuing, context) }
+                if (recommended.isNotEmpty()) item { contentRow("Recomendados para ti", recommended, context) }
             }
         }
     }
 }
 
 @Composable
-fun Header() {
+fun header() {
     val context = LocalContext.current
     var time by remember { mutableStateOf("") }
     var weather by remember { mutableStateOf<Weather?>(null) }
@@ -111,13 +115,13 @@ fun Header() {
         while (true) {
             val now = System.currentTimeMillis()
             time = fmt.format(Date(now))
-            delay(60_000 - now % 60_000)
+            delay((60_000 - now % 60_000).milliseconds)
         }
     }
     LaunchedEffect(Unit) {
         while (true) {
             weather = loadWeather()
-            delay(30 * 60_000L)
+            delay((30 * 60_000L).milliseconds)
         }
     }
     Row(
@@ -142,7 +146,7 @@ fun Header() {
         Spacer(Modifier.width(8.dp))
         Text(account.name, fontSize = 14.sp)
         Spacer(Modifier.width(16.dp))
-        FocusSurface(
+        focusSurface(
             onClick = { context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
             shape = CircleShape,
             modifier = Modifier.size(40.dp),
@@ -151,16 +155,21 @@ fun Header() {
 }
 
 @Composable
-fun Sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.background(SidebarBg).padding(horizontal = 16.dp, vertical = 20.dp)) {
-        Text("Tu TV", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 16.dp))
-        AppList(apps, onSelected, Modifier.weight(1f).fillMaxWidth())
+        Text(
+            "Tu TV",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
+        )
+        appList(apps, onSelected, Modifier.weight(1f).fillMaxWidth())
         Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-fun AppList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun appList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val state = rememberLazyListState()
     val first = remember { FocusRequester() }
@@ -179,17 +188,40 @@ fun AppList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
                 val letter = a.label.first().uppercaseChar()
                 val isFirstOfLetter = i == 0 || apps[i - 1].label.first().uppercaseChar() != letter
                 Row(Modifier.height(itemHeight), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(24.dp)) { if (isFirstOfLetter) Text(letter.toString(), fontSize = 12.sp, color = Muted) }
-                    FocusSurface(
+                    Box(Modifier.width(24.dp)) {
+                        if (isFirstOfLetter) Text(
+                            letter.toString(),
+                            fontSize = 12.sp,
+                            color = Muted
+                        )
+                    }
+                    focusSurface(
                         onClick = { context.startActivity(a.launchIntent) },
                         modifier = Modifier
                             .fillMaxSize()
                             .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                            .onFocusChanged { if (it.isFocused) { focused = i; onSelected(i) } },
+                            .onFocusChanged {
+                                if (it.isFocused) {
+                                    focused = i; onSelected(i)
+                                }
+                            },
                     ) {
-                        Row(Modifier.padding(horizontal = 10.dp).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                            Image(remember(a) { a.icon.toBitmap(96, 96).asImageBitmap() }, null, Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)))
-                            Text(a.label, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+                        Row(
+                            Modifier.padding(horizontal = 10.dp).fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                remember(a) { a.icon.toBitmap(96, 96).asImageBitmap() },
+                                null,
+                                Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+                            )
+                            Text(
+                                a.label,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
                         }
                     }
                 }
@@ -199,30 +231,83 @@ fun AppList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
 }
 
 @Composable
-fun Hero(app: TvApp?, content: Content?, context: Context) {
+fun hero(app: TvApp?, content: Content?, context: Context) {
     Box(Modifier.fillMaxWidth().height(260.dp).background(Card)) {
         var landscape by remember(content?.imageUrl) { mutableStateOf<Boolean?>(null) }
         when {
-            content?.wideUrl != null -> AsyncImage(content.wideUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            content?.imageUrl != null -> AsyncImage(content.imageUrl, null,
-                modifier = if (landscape == true) Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(320.dp, 180.dp).clip(RoundedCornerShape(12.dp))
-                    else Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(180.dp, 240.dp).clip(RoundedCornerShape(12.dp)),
+            content?.wideUrl != null -> AsyncImage(
+                content.wideUrl,
+                null,
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            content?.imageUrl != null -> AsyncImage(
+                content.imageUrl, null,
+                modifier = if (landscape == true) Modifier.align(Alignment.CenterEnd).padding(end = 64.dp)
+                    .size(320.dp, 180.dp).clip(RoundedCornerShape(12.dp))
+                else Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(180.dp, 240.dp)
+                    .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop,
                 onSuccess = { st ->
                     val dim = st.painter.intrinsicSize
                     if (dim.width > 0 && dim.height > 0) landscape = dim.width >= dim.height
                 })
-            else -> app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(640, 360).asImageBitmap() }, null, Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(240.dp, 135.dp)) }
+
+            else -> app?.let {
+                Image(
+                    remember(it) { (it.banner ?: it.icon).toBitmap(640, 360).asImageBitmap() },
+                    null,
+                    Modifier.align(Alignment.CenterEnd).padding(end = 64.dp).size(240.dp, 135.dp)
+                )
+            }
         }
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent))))
+        Box(
+            Modifier.fillMaxSize()
+                .background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent)))
+        )
         Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(380.dp)) {
-            Text(content?.title ?: app?.label.orEmpty(), fontSize = 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2)
-            content?.subtitle?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = Muted, modifier = Modifier.padding(top = 8.dp)) }
-            content?.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)) }
+            Text(
+                content?.title ?: app?.label.orEmpty(),
+                fontSize = 34.sp,
+                lineHeight = 40.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 2
+            )
+            content?.subtitle?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = Muted,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            content?.description?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FocusSurface(onClick = { launch(context, content, app) }, modifier = Modifier.height(40.dp), shape = RoundedCornerShape(20.dp), idle = Color.White, focusedColor = Color(0xFFE0E6FF)) {
+                focusSurface(
+                    onClick = { launch(context, content, app) },
+                    modifier = Modifier.height(40.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    idle = Color.White,
+                    focusedColor = Color(0xFFE0E6FF)
+                ) {
                     Box(Modifier.padding(horizontal = 24.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        Text(if (content != null) "\u25B6  Ver ahora" else "Abrir", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+                        Text(
+                            if (content != null) "\u25B6  Ver ahora" else "Abrir",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
                     }
                 }
             }
@@ -238,24 +323,64 @@ private fun launch(context: Context, content: Content?, app: TvApp?) {
 }
 
 @Composable
-fun ContentRow(title: String, items: List<Content>, context: Context) {
+fun contentRow(title: String, items: List<Content>, context: Context) {
     Column {
-        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 32.dp, bottom = 10.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 32.dp, bottom = 10.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             items(items, key = { it.id }) { c ->
-                FocusSurface(onClick = { launch(context, c, null) }, modifier = Modifier.width(220.dp)) {
+                focusSurface(onClick = { launch(context, c, null) }, modifier = Modifier.width(220.dp)) {
                     Column {
-                        Box(Modifier.fillMaxWidth().height(124.dp).background(Brush.linearGradient(listOf(Color(0xFF243056), Color(0xFF3B1E4A))))) {
-                            c.imageUrl?.let { AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-                                ?: c.app?.let { Image(remember(it) { (it.banner ?: it.icon).toBitmap(440, 248).asImageBitmap() }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                        Box(
+                            Modifier.fillMaxWidth().height(124.dp)
+                                .background(Brush.linearGradient(listOf(Color(0xFF243056), Color(0xFF3B1E4A))))
+                        ) {
+                            c.imageUrl?.let {
+                                AsyncImage(
+                                    it,
+                                    null,
+                                    Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                                ?: c.app?.let {
+                                    Image(remember(it) {
+                                        (it.banner ?: it.icon).toBitmap(440, 248).asImageBitmap()
+                                    }, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                }
                             c.progress?.let {
-                                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66FFFFFF)))
-                                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(it).height(4.dp).background(Color(0xFFE53935)))
+                                Box(
+                                    Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp)
+                                        .background(Color(0x66FFFFFF))
+                                )
+                                Box(
+                                    Modifier.align(Alignment.BottomStart).fillMaxWidth(it).height(4.dp)
+                                        .background(Color(0xFFE53935))
+                                )
                             }
                         }
                         Column(Modifier.padding(10.dp)) {
-                            Text(c.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (c.subtitle.isNotBlank()) Text(c.subtitle, fontSize = 11.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                c.title,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (c.subtitle.isNotBlank()) Text(
+                                c.subtitle,
+                                fontSize = 11.sp,
+                                color = Muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -264,9 +389,8 @@ fun ContentRow(title: String, items: List<Content>, context: Context) {
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun FocusSurface(
+fun focusSurface(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),

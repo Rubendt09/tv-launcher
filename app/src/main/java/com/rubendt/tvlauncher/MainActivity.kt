@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                CompositionLocalProvider(LocalContentColor provides Color.White) { LauncherScreen() }
+                CompositionLocalProvider(LocalContentColor provides Color.White) { launcherScreen() }
             }
         }
     }
