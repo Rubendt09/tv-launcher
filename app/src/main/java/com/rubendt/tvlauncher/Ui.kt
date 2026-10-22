@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,9 +28,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,7 +49,9 @@ import kotlinx.coroutines.coroutineScope
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -90,7 +96,15 @@ fun launcherScreen() {
     val app = apps.getOrNull(selected)
     val hero = (continuing + recommended).firstOrNull { it.app == null && it.packageName == app?.packageName }
 
-    Row(Modifier.fillMaxSize().background(Bg)) {
+    Box(Modifier.fillMaxSize()) {
+        val wallpaper by produceState<ImageBitmap?>(null) {
+            value = withContext(Dispatchers.IO) {
+                runCatching { context.assets.open("img_5759.jpg").use { BitmapFactory.decodeStream(it) }.asImageBitmap() }.getOrNull()
+            }
+        }
+        wallpaper?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        Box(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.72f)))
+        Row(Modifier.fillMaxSize()) {
         sidebar(apps, onSelected = { selected = it }, Modifier.width(280.dp).fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight()) {
             header()
@@ -104,6 +118,7 @@ fun launcherScreen() {
                 if (recommended.isNotEmpty()) item { contentRow("Recomendados para ti", recommended, context) }
             }
         }
+    }
     }
 }
 
@@ -159,7 +174,7 @@ fun header() {
 
 @Composable
 fun sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.background(SidebarBg).padding(horizontal = 16.dp, vertical = 20.dp)) {
+    Column(modifier.background(SidebarBg.copy(alpha = 0.85f)).padding(horizontal = 16.dp, vertical = 20.dp)) {
         Text(
             "Tu TV",
             fontSize = 22.sp,
