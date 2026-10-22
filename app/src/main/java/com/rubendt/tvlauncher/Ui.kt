@@ -285,7 +285,12 @@ fun hero(app: TvApp?, content: Content?, context: Context) {
             Modifier.fillMaxSize()
                 .background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent)))
         )
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(420.dp)) {
+        val posterSpace = when {
+            content?.wideUrl != null -> 0.dp
+            content?.imageUrl != null -> if (landscape == true) 384.dp else 244.dp
+            else -> 304.dp
+        }
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp, end = posterSpace + 16.dp).widthIn(max = 420.dp)) {
             Text(
                 content?.title ?: app?.label.orEmpty(),
                 fontSize = 34.sp,
