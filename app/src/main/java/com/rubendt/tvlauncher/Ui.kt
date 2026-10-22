@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -80,7 +82,7 @@ fun launcherScreen() {
             recommended.map { c ->
                 async {
                     val (banner, bg) = loadImages(c.title)
-                    c.copy(imageUrl = bg ?: c.imageUrl, wideUrl = banner)
+                    c.copy(imageUrl = bg ?: c.imageUrl, wideUrl = banner, info = loadShowInfo(c.title))
                 }
             }.awaitAll()
         }
@@ -218,7 +220,12 @@ fun appList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
 
 @Composable
 fun hero(app: TvApp?, content: Content?, context: Context) {
-    Box(Modifier.fillMaxWidth().height(260.dp).background(Card)) {
+    focusSurface(
+        onClick = { launch(context, content, app) },
+        modifier = Modifier.padding(horizontal = 32.dp).padding(top = 12.dp).fillMaxWidth().height(300.dp),
+        shape = RoundedCornerShape(20.dp),
+        idle = Card,
+    ) {
         var landscape by remember(content?.imageUrl) { mutableStateOf<Boolean?>(null) }
         when {
             content?.wideUrl != null -> AsyncImage(
@@ -252,7 +259,7 @@ fun hero(app: TvApp?, content: Content?, context: Context) {
             Modifier.fillMaxSize()
                 .background(Brush.horizontalGradient(listOf(Bg, Bg.copy(alpha = 0.6f), Color.Transparent)))
         )
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(380.dp)) {
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 32.dp).width(420.dp)) {
             Text(
                 content?.title ?: app?.label.orEmpty(),
                 fontSize = 34.sp,
@@ -260,7 +267,13 @@ fun hero(app: TvApp?, content: Content?, context: Context) {
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 2
             )
-            content?.subtitle?.takeIf { it.isNotBlank() }?.let {
+            val meta = listOfNotNull(
+                content?.info?.year,
+                content?.info?.seasons?.takeIf { it > 0 }?.let { if (it == 1) "1 temporada" else "$it temporadas" },
+                content?.info?.status
+            ).joinToString("  \u2022  ")
+            if (meta.isNotBlank()) Text(meta, fontSize = 13.sp, color = Muted, modifier = Modifier.padding(top = 8.dp))
+            content?.subtitle?.takeIf { it.isNotBlank() && it != app?.label }?.let {
                 Text(
                     it,
                     fontSize = 13.sp,
@@ -269,33 +282,14 @@ fun hero(app: TvApp?, content: Content?, context: Context) {
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            content?.description?.takeIf { it.isNotBlank() }?.let {
+            content?.info?.news?.let {
                 Text(
                     it,
                     fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF7C94FF),
                     modifier = Modifier.padding(top = 8.dp)
                 )
-            }
-            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                focusSurface(
-                    onClick = { launch(context, content, app) },
-                    modifier = Modifier.height(40.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    idle = Color.White,
-                    focusedColor = Color(0xFFE0E6FF)
-                ) {
-                    Box(Modifier.padding(horizontal = 24.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        Text(
-                            if (content != null) "\u25B6  Ver ahora" else "Abrir",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.Black
-                        )
-                    }
-                }
             }
         }
     }

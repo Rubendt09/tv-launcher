@@ -37,7 +37,10 @@ data class Content(
     val intent: Intent?,
     val app: TvApp? = null,
     val wideUrl: String? = null,
+    val info: ShowInfo? = null,
 )
+
+data class ShowInfo(val year: String?, val seasons: Int, val status: String?, val news: String?, val summary: String?)
 
 data class Weather(val temp: Int, val glyph: String, val city: String)
 
@@ -275,4 +278,29 @@ suspend fun loadImages(title: String): Pair<String?, String?> = withContext(Disp
         }
         banner to background
     }.getOrDefault(null to null)
+}
+
+private fun parseDay(s: String): Long? = runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(s)?.time }.getOrNull()
+
+suspend fun loadShowInfo(title: String): ShowInfo? = withContext(Dispatchers.IO) {
+    runCatching {
+        val q = URLEncoder.encode(title, "utf-8")
+        val show = JSONObject(URL("https://api.tvmaze.com/singlesearch/shows?q=$q&embed[]=seasons&embed[]=nextepisode").readText())
+        val embedded = show.optJSONObject("_embedded")
+        val arr = embedded?.optJSONArray("seasons") ?: JSONArray()
+        val seasons = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optInt("number") > 0 }
+        val lastPremiere = seasons.lastOrNull()?.optString("premiereDate")?.let(::parseDay)
+        val nextAir = embedded?.optJSONObject("nextepisode")?.optString("airdate")?.let(::parseDay)
+        ShowInfo(
+            year = show.optString("premiered").take(4).ifBlank { null },
+            seasons = seasons.size,
+            status = when (show.optString("status")) { "Running" -> "En emisión"; "Ended" -> "Finalizada"; else -> null },
+            news = when {
+                nextAir != null -> "Próximo episodio: " + SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("es")).format(Date(nextAir))
+                lastPremiere != null && System.currentTimeMillis() - lastPremiere in 0L..(60 * 86_400_000L) -> "Nueva temporada disponible"
+                else -> null
+            },
+            summary = show.optString("summary").replace(Regex("<[^>]+>"), "").trim().ifBlank { null },
+        )
+    }.getOrNull()
 }
