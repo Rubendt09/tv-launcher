@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -171,58 +172,43 @@ fun sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = M
 @Composable
 fun appList(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val state = rememberLazyListState()
     val first = remember { FocusRequester() }
-    var focused by remember { mutableIntStateOf(0) }
-    val itemHeight = 52.dp
-    BoxWithConstraints(modifier) {
-        LaunchedEffect(apps.isNotEmpty()) { if (apps.isNotEmpty()) first.requestFocus() }
-        LaunchedEffect(focused) { state.animateScrollToItem(focused) }
-        LazyColumn(
-            state = state,
-            contentPadding = PaddingValues(vertical = (maxHeight - itemHeight) / 2),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            itemsIndexed(apps, key = { _, a -> a.packageName }) { i, a ->
-                val letter = a.label.first().uppercaseChar()
-                val isFirstOfLetter = i == 0 || apps[i - 1].label.first().uppercaseChar() != letter
-                Row(Modifier.height(itemHeight), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(24.dp)) {
-                        if (isFirstOfLetter) Text(
-                            letter.toString(),
-                            fontSize = 12.sp,
-                            color = Muted
-                        )
-                    }
-                    focusSurface(
-                        onClick = { context.startActivity(a.launchIntent) },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                            .onFocusChanged {
-                                if (it.isFocused) {
-                                    focused = i; onSelected(i)
-                                }
-                            },
+    LaunchedEffect(apps.isNotEmpty()) { if (apps.isNotEmpty()) first.requestFocus() }
+    LazyColumn(
+        contentPadding = PaddingValues(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier,
+    ) {
+        itemsIndexed(apps, key = { _, a -> a.packageName }) { i, a ->
+            val letter = a.label.first().uppercaseChar()
+            val isFirstOfLetter = i == 0 || apps[i - 1].label.first().uppercaseChar() != letter
+            Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(24.dp)) {
+                    if (isFirstOfLetter) Text(letter.toString(), fontSize = 12.sp, color = Muted)
+                }
+                focusSurface(
+                    onClick = { context.startActivity(a.launchIntent) },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                        .onFocusChanged { if (it.isFocused) onSelected(i) },
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp).fillMaxHeight(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.padding(horizontal = 10.dp).fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Image(
-                                remember(a) { a.icon.toBitmap(96, 96).asImageBitmap() },
-                                null,
-                                Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
-                            )
-                            Text(
-                                a.label,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = 12.dp)
-                            )
-                        }
+                        Image(
+                            remember(a) { a.icon.toBitmap(96, 96).asImageBitmap() },
+                            null,
+                            Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+                        )
+                        Text(
+                            a.label,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
                     }
                 }
             }
