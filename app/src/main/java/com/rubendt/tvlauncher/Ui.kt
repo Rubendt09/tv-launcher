@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -60,8 +61,14 @@ import kotlin.time.Duration.Companion.milliseconds
 private val Bg = Color(0xFF0A0E17)
 private val SidebarBg = Color(0xFF0D121D)
 private val Card = Color(0xFF151B2B)
-private val Accent = Color(0xFF2A3A66)
-private val Muted = Color(0xFF9AA3B8)
+private val Accent = Color(0x4DFFFFFF)
+private val Muted = Color(0xFFC4CBDB)
+private val GlassTint = Color(0x1FFFFFFF)
+private val GlassFill = Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x12FFFFFF)))
+private val GlassEdge = Brush.linearGradient(listOf(Color(0x99FFFFFF), Color(0x14FFFFFF), Color(0x55FFFFFF)))
+
+private fun Modifier.glass(shape: androidx.compose.ui.graphics.Shape) =
+    background(GlassFill, shape).border(1.dp, GlassEdge, shape)
 
 
 @Composable
@@ -103,9 +110,9 @@ fun launcherScreen() {
             }
         }
         wallpaper?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-        Box(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.72f)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Bg.copy(alpha = 0.25f), Bg.copy(alpha = 0.6f)))))
         Row(Modifier.fillMaxSize()) {
-        sidebar(apps, onSelected = { selected = it }, Modifier.width(280.dp).fillMaxHeight())
+        sidebar(apps, onSelected = { selected = it }, Modifier.padding(16.dp).width(280.dp).fillMaxHeight())
         Column(Modifier.weight(1f).fillMaxHeight()) {
             header()
             LazyColumn(
@@ -167,6 +174,7 @@ fun header() {
         focusSurface(
             onClick = { context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
             shape = CircleShape,
+            glass = true,
             modifier = Modifier.size(40.dp),
         ) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("\u2699", fontSize = 22.sp) } }
     }
@@ -174,7 +182,10 @@ fun header() {
 
 @Composable
 fun sidebar(apps: List<TvApp>, onSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.background(SidebarBg.copy(alpha = 0.85f)).padding(horizontal = 16.dp, vertical = 20.dp)) {
+    Column(
+        modifier.clip(RoundedCornerShape(28.dp)).background(SidebarBg.copy(alpha = 0.35f))
+            .glass(RoundedCornerShape(28.dp)).padding(horizontal = 16.dp, vertical = 20.dp)
+    ) {
         Text(
             "Tu TV",
             fontSize = 22.sp,
@@ -238,8 +249,8 @@ fun hero(app: TvApp?, content: Content?, context: Context) {
     focusSurface(
         onClick = { launch(context, content, app) },
         modifier = Modifier.padding(horizontal = 32.dp).padding(top = 12.dp).fillMaxWidth().height(300.dp),
-        shape = RoundedCornerShape(20.dp),
-        idle = Card,
+        shape = RoundedCornerShape(24.dp),
+        glass = true,
     ) {
         var landscape by remember(content?.imageUrl) { mutableStateOf<Boolean?>(null) }
         when {
@@ -331,7 +342,7 @@ fun contentRow(title: String, items: List<Content>, context: Context) {
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(items, key = { it.id }) { c ->
-                focusSurface(onClick = { launch(context, c, null) }, modifier = Modifier.width(220.dp)) {
+                focusSurface(onClick = { launch(context, c, null) }, modifier = Modifier.width(220.dp), shape = RoundedCornerShape(18.dp), glass = true) {
                     Column {
                         Box(
                             Modifier.fillMaxWidth().height(124.dp)
@@ -389,7 +400,8 @@ fun focusSurface(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
-    idle: Color = Color.Transparent,
+    glass: Boolean = false,
+    idle: Color = if (glass) GlassTint else Color.Transparent,
     focusedColor: Color = Accent,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -402,6 +414,9 @@ fun focusSurface(
             contentColor = Color.White, focusedContentColor = if (idle == Color.White) Color.Black else Color.White,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
-        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(2.dp, Color(0xFF7C94FF)))),
+        border = ClickableSurfaceDefaults.border(
+            border = if (glass) Border(BorderStroke(1.dp, GlassEdge)) else Border.None,
+            focusedBorder = Border(BorderStroke(2.dp, Color(0xE6FFFFFF))),
+        ),
     ) { Box(content = content) }
 }
